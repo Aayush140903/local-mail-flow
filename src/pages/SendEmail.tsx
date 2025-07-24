@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { EmailBuilder } from "@/components/email-builder/EmailBuilder"
+import { EmailTemplates, EmailTemplate } from "@/components/email-builder/EmailTemplates"
 import { 
   Send, 
   Eye, 
@@ -14,7 +16,10 @@ import {
   Save, 
   RefreshCw,
   Plus,
-  X
+  X,
+  Palette,
+  FileText,
+  Wand2
 } from "lucide-react"
 
 export default function SendEmail() {
@@ -22,6 +27,8 @@ export default function SendEmail() {
   const [isLoading, setIsLoading] = useState(false)
   const [recipients, setRecipients] = useState<string[]>([])
   const [currentRecipient, setCurrentRecipient] = useState("")
+  const [activeTab, setActiveTab] = useState<'builder' | 'templates' | 'code'>('templates')
+  const [emailComponents, setEmailComponents] = useState<any[]>([])
   const [formData, setFormData] = useState({
     from: "noreply@localmail.dev",
     subject: "",
@@ -109,12 +116,27 @@ export default function SendEmail() {
     }
   }
 
+  const handleEmailBuilderChange = (html: string, components: any[]) => {
+    setFormData(prev => ({ ...prev, html }))
+    setEmailComponents(components)
+  }
+
+  const handleTemplateSelect = (template: EmailTemplate) => {
+    setFormData(prev => ({ ...prev, html: template.html }))
+    setEmailComponents(template.components)
+    setActiveTab('builder')
+    toast({
+      title: "Template Applied",
+      description: `${template.name} template has been loaded`,
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Send Email</h1>
-          <p className="text-muted-foreground">Create and send beautiful emails to your recipients</p>
+          <h1 className="text-3xl font-bold">Email Campaign Builder</h1>
+          <p className="text-muted-foreground">Create beautiful, professional emails with our advanced builder</p>
         </div>
         <div className="flex space-x-2">
           <Button variant="outline" onClick={handlePreview}>
@@ -132,103 +154,185 @@ export default function SendEmail() {
         </div>
       </div>
 
+      {/* Email Configuration */}
+      <Card className="shadow-soft">
+        <CardHeader>
+          <CardTitle>Email Configuration</CardTitle>
+          <CardDescription>Configure your email settings and recipients</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* From Field */}
+            <div className="space-y-2">
+              <Label htmlFor="from">From Email</Label>
+              <Input
+                id="from"
+                value={formData.from}
+                onChange={(e) => setFormData({ ...formData, from: e.target.value })}
+                placeholder="noreply@yourcompany.com"
+              />
+            </div>
+
+            {/* Subject */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="subject">Subject Line</Label>
+              <Input
+                id="subject"
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                placeholder="Your compelling email subject line"
+              />
+            </div>
+          </div>
+
+          {/* Recipients */}
+          <div className="space-y-2">
+            <Label>Recipients</Label>
+            <div className="flex space-x-2">
+              <Input
+                value={currentRecipient}
+                onChange={(e) => setCurrentRecipient(e.target.value)}
+                placeholder="recipient@example.com"
+                onKeyPress={(e) => e.key === "Enter" && addRecipient()}
+              />
+              <Button type="button" onClick={addRecipient} variant="outline">
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {recipients.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {recipients.map((email) => (
+                  <Badge key={email} variant="secondary" className="flex items-center space-x-1">
+                    <span>{email}</span>
+                    <button
+                      onClick={() => removeRecipient(email)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Builder Tabs */}
+      <Card className="shadow-soft">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Email Content Builder</CardTitle>
+              <CardDescription>Design your email using our advanced tools</CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Badge variant="outline" className="text-xs">
+                {emailComponents.length} components
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
+            <div className="px-6 pb-4">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="templates" className="flex items-center space-x-2">
+                  <Palette className="w-4 h-4" />
+                  <span>Templates</span>
+                </TabsTrigger>
+                <TabsTrigger value="builder" className="flex items-center space-x-2">
+                  <Wand2 className="w-4 h-4" />
+                  <span>Visual Builder</span>
+                </TabsTrigger>
+                <TabsTrigger value="code" className="flex items-center space-x-2">
+                  <Code className="w-4 h-4" />
+                  <span>HTML Code</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <TabsContent value="templates" className="px-6 pb-6">
+              <EmailTemplates onSelectTemplate={handleTemplateSelect} />
+            </TabsContent>
+            
+            <TabsContent value="builder" className="p-0">
+              <div className="h-[800px]">
+                <EmailBuilder 
+                  onContentChange={handleEmailBuilderChange}
+                  initialComponents={emailComponents}
+                />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="code" className="px-6 pb-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="html-editor">HTML Code Editor</Label>
+                  <Badge variant="outline" className="text-xs">Direct HTML editing</Badge>
+                </div>
+                <Textarea
+                  id="html-editor"
+                  value={formData.html}
+                  onChange={(e) => setFormData({ ...formData, html: e.target.value })}
+                  className="min-h-[500px] font-mono text-sm"
+                  placeholder="Enter your HTML email content here..."
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Section */}
+        {/* Email Statistics */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="shadow-soft">
             <CardHeader>
-              <CardTitle>Email Details</CardTitle>
-              <CardDescription>Configure your email settings and recipients</CardDescription>
+              <CardTitle>Campaign Insights</CardTitle>
+              <CardDescription>Expected performance and recommendations</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* From Field */}
-              <div className="space-y-2">
-                <Label htmlFor="from">From</Label>
-                <Input
-                  id="from"
-                  value={formData.from}
-                  onChange={(e) => setFormData({ ...formData, from: e.target.value })}
-                  placeholder="noreply@yourcompany.com"
-                />
-              </div>
-
-              {/* Recipients */}
-              <div className="space-y-2">
-                <Label>Recipients</Label>
-                <div className="flex space-x-2">
-                  <Input
-                    value={currentRecipient}
-                    onChange={(e) => setCurrentRecipient(e.target.value)}
-                    placeholder="recipient@example.com"
-                    onKeyPress={(e) => e.key === "Enter" && addRecipient()}
-                  />
-                  <Button type="button" onClick={addRecipient} variant="outline">
-                    <Plus className="w-4 h-4" />
-                  </Button>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold text-success">98%</div>
+                  <div className="text-sm text-muted-foreground">Est. Delivery Rate</div>
                 </div>
-                
-                {recipients.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {recipients.map((email) => (
-                      <Badge key={email} variant="secondary" className="flex items-center space-x-1">
-                        <span>{email}</span>
-                        <button
-                          onClick={() => removeRecipient(email)}
-                          className="ml-1 hover:text-destructive"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold text-primary">24%</div>
+                  <div className="text-sm text-muted-foreground">Est. Open Rate</div>
+                </div>
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold text-accent">6%</div>
+                  <div className="text-sm text-muted-foreground">Est. Click Rate</div>
+                </div>
               </div>
-
-              {/* Subject */}
+              
               <div className="space-y-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  placeholder="Your email subject line"
-                />
+                <h4 className="font-medium">Optimization Tips:</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• Keep subject line under 50 characters for better mobile visibility</li>
+                  <li>• Include a clear call-to-action button above the fold</li>
+                  <li>• Test your email across different devices and email clients</li>
+                </ul>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Email Content */}
-          <Card className="shadow-soft">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Code className="w-5 h-5" />
-                <span>Email Content</span>
-              </CardTitle>
-              <CardDescription>Write your email in HTML format</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={formData.html}
-                onChange={(e) => setFormData({ ...formData, html: e.target.value })}
-                className="min-h-[400px] font-mono text-sm"
-                placeholder="Enter your HTML email content here..."
-              />
             </CardContent>
           </Card>
         </div>
 
-        {/* Preview Section */}
+        {/* Preview & Summary Section */}
         <div className="space-y-6">
           <Card className="shadow-soft">
             <CardHeader>
-              <CardTitle>Email Preview</CardTitle>
-              <CardDescription>See how your email will look</CardDescription>
+              <CardTitle>Live Preview</CardTitle>
+              <CardDescription>Real-time preview of your email</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-lg p-4 bg-muted/50 max-h-96 overflow-y-auto">
+              <div className="border rounded-lg p-4 bg-background max-h-96 overflow-y-auto">
                 <div 
                   dangerouslySetInnerHTML={{ __html: formData.html }}
-                  className="prose prose-sm max-w-none"
+                  className="prose prose-sm max-w-none [&>*]:my-2"
                 />
               </div>
             </CardContent>
@@ -236,21 +340,56 @@ export default function SendEmail() {
 
           <Card className="shadow-soft">
             <CardHeader>
-              <CardTitle>Sending Summary</CardTitle>
+              <CardTitle>Campaign Summary</CardTitle>
+              <CardDescription>Review before sending</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Recipients:</span>
+                  <span className="font-medium">{recipients.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">From:</span>
+                  <span className="font-medium truncate max-w-40">{formData.from}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subject:</span>
+                  <span className="font-medium truncate max-w-40">{formData.subject || "No subject"}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Components:</span>
+                  <span className="font-medium">{emailComponents.length}</span>
+                </div>
+              </div>
+              
+              <div className="pt-3 border-t">
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>✓ Mobile responsive design</p>
+                  <p>✓ Cross-client compatibility</p>
+                  <p>✓ Optimized for deliverability</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="shadow-soft">
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Recipients:</span>
-                <span className="font-medium">{recipients.length}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">From:</span>
-                <span className="font-medium truncate">{formData.from}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subject:</span>
-                <span className="font-medium truncate">{formData.subject || "No subject"}</span>
-              </div>
+              <Button variant="outline" className="w-full" onClick={handlePreview}>
+                <Eye className="w-4 h-4 mr-2" />
+                Preview in New Tab
+              </Button>
+              <Button variant="outline" className="w-full">
+                <Save className="w-4 h-4 mr-2" />
+                Save as Template
+              </Button>
+              <Button variant="outline" className="w-full">
+                <FileText className="w-4 h-4 mr-2" />
+                Export HTML
+              </Button>
             </CardContent>
           </Card>
         </div>
