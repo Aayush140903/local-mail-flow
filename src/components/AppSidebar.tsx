@@ -19,6 +19,7 @@ const navigation = [
   { title: "Dashboard", url: "/", icon: BarChart3 },
   { title: "Send Email", url: "/send", icon: Send },
   { title: "Infrastructure", url: "/infrastructure", icon: Server },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Email Logs", url: "/logs", icon: Clock },
   { title: "API Keys", url: "/api-keys", icon: Key },
   { title: "Settings", url: "/settings", icon: Settings },

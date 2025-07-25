@@ -76,3 +76,45 @@ export function DatePickerWithRange({
     </div>
   )
 }
+
+interface DatePickerProps {
+  className?: string
+  selected?: Date
+  onSelect?: (date: Date | undefined) => void
+  placeholder?: string
+}
+
+export function DatePicker({
+  className,
+  selected,
+  onSelect,
+  placeholder = "Pick a date",
+}: DatePickerProps) {
+  return (
+    <div className={cn("grid gap-2", className)}>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant={"outline"}
+            className={cn(
+              "w-[240px] justify-start text-left font-normal",
+              !selected && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selected ? format(selected, "PPP") : <span>{placeholder}</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selected}
+            onSelect={onSelect}
+            initialFocus
+            className={cn("p-3 pointer-events-auto")}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}

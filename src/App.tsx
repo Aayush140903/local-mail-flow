@@ -10,6 +10,7 @@ import EmailLogs from "./pages/EmailLogs";
 import ApiKeys from "./pages/ApiKeys";
 import Settings from "./pages/Settings";
 import Infrastructure from "./pages/Infrastructure";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/send" element={<SendEmail />} />
             <Route path="/infrastructure" element={<Infrastructure />} />
+            <Route path="/analytics" element={<Analytics />} />
             <Route path="/logs" element={<EmailLogs />} />
             <Route path="/api-keys" element={<ApiKeys />} />
             <Route path="/settings" element={<Settings />} />
