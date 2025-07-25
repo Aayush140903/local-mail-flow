@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Mail, BarChart3, Key, Settings, Send, Clock } from "lucide-react"
+import { Mail, BarChart3, Key, Settings, Send, Clock, Server } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import {
@@ -18,6 +18,7 @@ import {
 const navigation = [
   { title: "Dashboard", url: "/", icon: BarChart3 },
   { title: "Send Email", url: "/send", icon: Send },
+  { title: "Infrastructure", url: "/infrastructure", icon: Server },
   { title: "Email Logs", url: "/logs", icon: Clock },
   { title: "API Keys", url: "/api-keys", icon: Key },
   { title: "Settings", url: "/settings", icon: Settings },
