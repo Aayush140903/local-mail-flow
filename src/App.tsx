@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { AuthProvider } from "@/hooks/useAuth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import SendEmail from "./pages/SendEmail";
 import EmailLogs from "./pages/EmailLogs";
@@ -12,32 +14,87 @@ import Settings from "./pages/Settings";
 import Infrastructure from "./pages/Infrastructure";
 import Analytics from "./pages/Analytics";
 import Enterprise from "./pages/Enterprise";
+import Auth from "./pages/Auth";
+import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Layout>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/send" element={<SendEmail />} />
-            <Route path="/infrastructure" element={<Infrastructure />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/enterprise" element={<Enterprise />} />
-            <Route path="/logs" element={<EmailLogs />} />
-            <Route path="/api-keys" element={<ApiKeys />} />
-            <Route path="/settings" element={<Settings />} />
+            {/* Public routes */}
+            <Route path="/welcome" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            
+            {/* Protected routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Dashboard />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/send" element={
+              <ProtectedRoute>
+                <Layout>
+                  <SendEmail />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/infrastructure" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Infrastructure />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Analytics />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/enterprise" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Enterprise />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/logs" element={
+              <ProtectedRoute>
+                <Layout>
+                  <EmailLogs />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/api-keys" element={
+              <ProtectedRoute>
+                <Layout>
+                  <ApiKeys />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Settings />
+                </Layout>
+              </ProtectedRoute>
+            } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </Layout>
-      </BrowserRouter>
-    </TooltipProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

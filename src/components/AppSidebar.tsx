@@ -1,6 +1,14 @@
 import { useState } from "react"
-import { Mail, BarChart3, Key, Settings, Send, Clock, Server, Shield } from "lucide-react"
+import { Mail, BarChart3, Key, Settings, Send, Clock, Server, Shield, LogOut, User } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
+import { useAuth } from "@/hooks/useAuth"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 import {
   Sidebar,
@@ -31,6 +39,7 @@ export function AppSidebar() {
   const location = useLocation()
   const currentPath = location.pathname
   const isCollapsed = state === "collapsed"
+  const { user, signOut } = useAuth()
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -91,19 +100,55 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* User section */}
-        {!isCollapsed && (
-          <div className="mt-auto p-4 border-t border-sidebar-border">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-xs font-medium text-primary-foreground">U</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-sidebar-foreground">User</p>
-                <p className="text-xs text-sidebar-foreground/60">user@example.com</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="mt-auto p-4 border-t border-sidebar-border">
+          {isCollapsed ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full p-2">
+                  <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                    <User className="w-3 h-3 text-primary-foreground" />
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem disabled>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{user?.email || 'User'}</span>
+                    <span className="text-xs text-muted-foreground">Signed in</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={signOut} className="text-destructive">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="w-full justify-start p-3 h-auto">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-primary-foreground" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium text-sidebar-foreground truncate">
+                        {user?.email || 'User'}
+                      </p>
+                      <p className="text-xs text-sidebar-foreground/60">Signed in</p>
+                    </div>
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem onClick={signOut} className="text-destructive">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </SidebarContent>
     </Sidebar>
   )
