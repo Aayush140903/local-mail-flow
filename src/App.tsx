@@ -17,6 +17,7 @@ import Enterprise from "./pages/Enterprise";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import { UserOnboarding } from "./components/onboarding/UserOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,13 @@ const App = () => (
             {/* Public routes */}
             <Route path="/welcome" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            
+            {/* Onboarding route */}
+            <Route path="/onboarding" element={
+              <ProtectedRoute>
+                <UserOnboarding />
+              </ProtectedRoute>
+            } />
             
             {/* Protected routes */}
             <Route path="/" element={

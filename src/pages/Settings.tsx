@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { UserProfile } from "@/components/profile/UserProfile"
 import { 
   Settings as SettingsIcon, 
   Save, 
@@ -22,7 +23,8 @@ import {
   Shield, 
   Bell,
   Palette,
-  Database
+  Database,
+  User
 } from "lucide-react"
 
 export default function Settings() {
@@ -86,8 +88,12 @@ export default function Settings() {
         </div>
       </div>
 
-      <Tabs defaultValue="email" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs defaultValue="profile" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="profile" className="flex items-center space-x-2">
+            <User className="w-4 h-4" />
+            <span className="hidden sm:inline">Profile</span>
+          </TabsTrigger>
           <TabsTrigger value="email" className="flex items-center space-x-2">
             <Mail className="w-4 h-4" />
             <span className="hidden sm:inline">Email</span>
@@ -109,6 +115,11 @@ export default function Settings() {
             <span className="hidden sm:inline">Database</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Profile Settings */}
+        <TabsContent value="profile">
+          <UserProfile />
+        </TabsContent>
 
         {/* Email Settings */}
         <TabsContent value="email">

@@ -1,22 +1,43 @@
 import { ReactNode, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { useOnboarding } from '@/hooks/useOnboarding'
 
 interface ProtectedRouteProps {
   children: ReactNode
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const { isComplete: onboardingComplete, isLoading: onboardingLoading } = useOnboarding()
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       navigate('/auth')
     }
-  }, [user, loading, navigate])
+  }, [user, authLoading, navigate])
 
-  if (loading) {
+  useEffect(() => {
+    // Only redirect to onboarding if:
+    // 1. User is authenticated
+    // 2. Onboarding is not complete
+    // 3. Not already on onboarding page
+    // 4. Not on settings page (where they can update profile)
+    if (
+      user && 
+      !authLoading && 
+      !onboardingLoading && 
+      !onboardingComplete && 
+      location.pathname !== '/onboarding' &&
+      location.pathname !== '/settings'
+    ) {
+      navigate('/onboarding')
+    }
+  }, [user, authLoading, onboardingLoading, onboardingComplete, location.pathname, navigate])
+
+  if (authLoading || onboardingLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
