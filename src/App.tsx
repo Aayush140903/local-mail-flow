@@ -17,6 +17,7 @@ import Enterprise from "./pages/Enterprise";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import Contacts from "./pages/Contacts";
 import { UserOnboarding } from "./components/onboarding/UserOnboarding";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,13 @@ const App = () => (
               <ProtectedRoute>
                 <Layout>
                   <ApiKeys />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/contacts" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Contacts />
                 </Layout>
               </ProtectedRoute>
             } />
