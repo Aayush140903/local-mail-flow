@@ -18,6 +18,7 @@ import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Contacts from "./pages/Contacts";
+import Campaigns from "./pages/Campaigns";
 import { UserOnboarding } from "./components/onboarding/UserOnboarding";
 
 const queryClient = new QueryClient();
@@ -95,6 +96,13 @@ const App = () => (
               <ProtectedRoute>
                 <Layout>
                   <Contacts />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/campaigns" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Campaigns />
                 </Layout>
               </ProtectedRoute>
             } />

@@ -27,6 +27,7 @@ const navigation = [
   { title: "Dashboard", url: "/", icon: BarChart3 },
   { title: "Send Email", url: "/send", icon: Send },
   { title: "Contacts", url: "/contacts", icon: Users },
+  { title: "Campaigns", url: "/campaigns", icon: Mail },
   { title: "Infrastructure", url: "/infrastructure", icon: Server },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Enterprise", url: "/enterprise", icon: Shield },

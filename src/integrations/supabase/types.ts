@@ -14,6 +14,258 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_triggers: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          trigger_conditions: Json
+          trigger_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          trigger_conditions?: Json
+          trigger_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          trigger_conditions?: Json
+          trigger_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      campaign_analytics: {
+        Row: {
+          bounce_rate: number | null
+          campaign_id: string
+          click_rate: number | null
+          created_at: string
+          id: string
+          open_rate: number | null
+          recorded_at: string
+          total_bounced: number | null
+          total_clicked: number | null
+          total_delivered: number | null
+          total_opened: number | null
+          total_sent: number | null
+          total_unsubscribed: number | null
+          unsubscribe_rate: number | null
+          updated_at: string
+          user_id: string
+          variant_id: string | null
+        }
+        Insert: {
+          bounce_rate?: number | null
+          campaign_id: string
+          click_rate?: number | null
+          created_at?: string
+          id?: string
+          open_rate?: number | null
+          recorded_at?: string
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_sent?: number | null
+          total_unsubscribed?: number | null
+          unsubscribe_rate?: number | null
+          updated_at?: string
+          user_id: string
+          variant_id?: string | null
+        }
+        Update: {
+          bounce_rate?: number | null
+          campaign_id?: string
+          click_rate?: number | null
+          created_at?: string
+          id?: string
+          open_rate?: number | null
+          recorded_at?: string
+          total_bounced?: number | null
+          total_clicked?: number | null
+          total_delivered?: number | null
+          total_opened?: number | null
+          total_sent?: number | null
+          total_unsubscribed?: number | null
+          unsubscribe_rate?: number | null
+          updated_at?: string
+          user_id?: string
+          variant_id?: string | null
+        }
+        Relationships: []
+      }
+      campaign_emails: {
+        Row: {
+          campaign_id: string
+          content: string
+          created_at: string
+          delay_days: number
+          delay_hours: number
+          id: string
+          is_active: boolean
+          name: string
+          sequence_order: number
+          subject_line: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          content: string
+          created_at?: string
+          delay_days?: number
+          delay_hours?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          sequence_order?: number
+          subject_line: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          content?: string
+          created_at?: string
+          delay_days?: number
+          delay_hours?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          sequence_order?: number
+          subject_line?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      campaign_variants: {
+        Row: {
+          campaign_id: string
+          content: string | null
+          created_at: string
+          from_name: string | null
+          id: string
+          is_winner: boolean | null
+          name: string
+          subject_line: string | null
+          traffic_percentage: number
+          updated_at: string
+          user_id: string
+          variant_type: string
+        }
+        Insert: {
+          campaign_id: string
+          content?: string | null
+          created_at?: string
+          from_name?: string | null
+          id?: string
+          is_winner?: boolean | null
+          name: string
+          subject_line?: string | null
+          traffic_percentage?: number
+          updated_at?: string
+          user_id: string
+          variant_type?: string
+        }
+        Update: {
+          campaign_id?: string
+          content?: string | null
+          created_at?: string
+          from_name?: string | null
+          id?: string
+          is_winner?: boolean | null
+          name?: string
+          subject_line?: string | null
+          traffic_percentage?: number
+          updated_at?: string
+          user_id?: string
+          variant_type?: string
+        }
+        Relationships: []
+      }
+      campaigns: {
+        Row: {
+          completed_at: string | null
+          contact_list_id: string | null
+          created_at: string
+          description: string | null
+          from_email: string | null
+          from_name: string | null
+          id: string
+          name: string
+          preheader: string | null
+          reply_to_email: string | null
+          scheduled_at: string | null
+          segment_id: string | null
+          settings: Json | null
+          started_at: string | null
+          status: string
+          subject_line: string | null
+          template_id: string | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          contact_list_id?: string | null
+          created_at?: string
+          description?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          name: string
+          preheader?: string | null
+          reply_to_email?: string | null
+          scheduled_at?: string | null
+          segment_id?: string | null
+          settings?: Json | null
+          started_at?: string | null
+          status?: string
+          subject_line?: string | null
+          template_id?: string | null
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          contact_list_id?: string | null
+          created_at?: string
+          description?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          name?: string
+          preheader?: string | null
+          reply_to_email?: string | null
+          scheduled_at?: string | null
+          segment_id?: string | null
+          settings?: Json | null
+          started_at?: string | null
+          status?: string
+          subject_line?: string | null
+          template_id?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       contact_list_memberships: {
         Row: {
           added_at: string
