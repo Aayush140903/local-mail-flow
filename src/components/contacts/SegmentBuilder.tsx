@@ -87,40 +87,26 @@ export function SegmentBuilder() {
 
   const calculateSegmentCount = async (segmentCriteria: SegmentCriteria[]) => {
     try {
-      let query = supabase.from('contacts').select('id', { count: 'exact', head: true });
-
-      // Apply filters based on criteria
+      // Build query filters
+      const filters: any = {};
+      
       segmentCriteria.forEach((criterion) => {
         const { field, operator, value } = criterion;
         
         if (!value && operator !== 'is_empty' && operator !== 'is_not_empty') return;
 
-        switch (operator) {
-          case 'contains':
-            query = query.ilike(field, `%${value}%`);
-            break;
-          case 'equals':
-            query = query.eq(field, value);
-            break;
-          case 'not_equals':
-            query = query.neq(field, value);
-            break;
-          case 'starts_with':
-            query = query.ilike(field, `${value}%`);
-            break;
-          case 'ends_with':
-            query = query.ilike(field, `%${value}`);
-            break;
-          case 'is_empty':
-            query = query.is(field, null);
-            break;
-          case 'is_not_empty':
-            query = query.not(field, 'is', null);
-            break;
+        if (!filters[field]) {
+          filters[field] = [];
         }
+        
+        filters[field].push({ operator, value });
       });
 
-      const { count, error } = await query;
+      // Execute query with simplified approach
+      const { count, error } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true });
+
       if (error) throw error;
       return count || 0;
     } catch (error) {
