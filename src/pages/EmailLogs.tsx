@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/integrations/supabase/client"
 import { 
   Search, 
   Filter, 
@@ -30,105 +32,102 @@ import {
   XCircle,
   AlertTriangle
 } from "lucide-react"
+import { format } from "date-fns"
 
-// Mock data - replace with real data from your backend
-const mockEmails = [
-  {
-    id: "1",
-    to: "user@example.com",
-    from: "noreply@localmail.dev", 
-    subject: "Welcome to LocalMail Platform",
-    status: "delivered",
-    createdAt: "2024-01-15T10:30:00Z",
-    deliveredAt: "2024-01-15T10:30:15Z",
-    previewUrl: "https://ethereal.email/message/preview/abc123"
-  },
-  {
-    id: "2", 
-    to: "admin@company.com",
-    from: "noreply@localmail.dev",
-    subject: "Monthly Analytics Report", 
-    status: "opened",
-    createdAt: "2024-01-15T09:15:00Z",
-    deliveredAt: "2024-01-15T09:15:12Z",
-    openedAt: "2024-01-15T09:45:30Z",
-    previewUrl: "https://ethereal.email/message/preview/def456"
-  },
-  {
-    id: "3",
-    to: "support@service.com", 
-    from: "noreply@localmail.dev",
-    subject: "System Maintenance Notification",
-    status: "pending",
-    createdAt: "2024-01-15T08:00:00Z",
-    previewUrl: null
-  },
-  {
-    id: "4",
-    to: "team@startup.com",
-    from: "noreply@localmail.dev", 
-    subject: "Product Update v2.1.0",
-    status: "failed",
-    createdAt: "2024-01-15T07:30:00Z",
-    error: "Invalid recipient domain",
-    previewUrl: "https://ethereal.email/message/preview/ghi789"
-  },
-  {
-    id: "5",
-    to: "newsletter@blog.com",
-    from: "noreply@localmail.dev",
-    subject: "Weekly Newsletter - Tech Updates", 
-    status: "delivered",
-    createdAt: "2024-01-14T16:20:00Z",
-    deliveredAt: "2024-01-14T16:20:08Z",
-    previewUrl: "https://ethereal.email/message/preview/jkl012"
-  }
-]
+interface EmailLog {
+  id: string;
+  recipient_email: string;
+  subject: string | null;
+  status: string;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  bounced_at: string | null;
+  error_message: string | null;
+  created_at: string;
+  campaign_id: string | null;
+}
 
 export default function EmailLogs() {
+  const [logs, setLogs] = useState<EmailLog[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
-  const filteredEmails = mockEmails.filter((email) => {
+  useEffect(() => {
+    fetchEmailLogs()
+  }, [])
+
+  const fetchEmailLogs = async () => {
+    try {
+      setIsLoading(true)
+      const { data, error } = await supabase
+        .from('email_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      if (error) throw error
+      setLogs(data || [])
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch email logs',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const filteredEmails = logs.filter((log) => {
     const matchesSearch = 
-      email.to.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      email.from.toLowerCase().includes(searchTerm.toLowerCase())
+      log.recipient_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.subject?.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesStatus = statusFilter === "all" || email.status === statusFilter
+    const matchesStatus = statusFilter === "all" || log.status === statusFilter
     
     return matchesSearch && matchesStatus
   })
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "delivered":
-        return <CheckCircle className="w-4 h-4 text-success" />
-      case "opened": 
-        return <Eye className="w-4 h-4 text-primary" />
-      case "pending":
-        return <Clock className="w-4 h-4 text-warning" />
-      case "failed":
-        return <XCircle className="w-4 h-4 text-destructive" />
-      default:
-        return <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+  const getStatusIcon = (log: EmailLog) => {
+    if (log.bounced_at || log.status === 'failed') {
+      return <XCircle className="w-4 h-4 text-destructive" />
     }
+    if (log.clicked_at) {
+      return <CheckCircle className="w-4 h-4 text-success" />
+    }
+    if (log.opened_at) {
+      return <Eye className="w-4 h-4 text-primary" />
+    }
+    if (log.delivered_at || log.status === 'sent') {
+      return <CheckCircle className="w-4 h-4 text-success" />
+    }
+    if (log.status === 'pending') {
+      return <Clock className="w-4 h-4 text-warning" />
+    }
+    return <AlertTriangle className="w-4 h-4 text-muted-foreground" />
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "delivered":
-        return <Badge className="bg-success text-success-foreground">Delivered</Badge>
-      case "opened":
-        return <Badge className="bg-primary text-primary-foreground">Opened</Badge>
-      case "pending":
-        return <Badge variant="secondary">Pending</Badge>
-      case "failed":
-        return <Badge variant="destructive">Failed</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+  const getStatusBadge = (log: EmailLog) => {
+    if (log.bounced_at) {
+      return <Badge variant="destructive">Bounced</Badge>
     }
+    if (log.clicked_at) {
+      return <Badge className="bg-success text-success-foreground">Clicked</Badge>
+    }
+    if (log.opened_at) {
+      return <Badge className="bg-primary text-primary-foreground">Opened</Badge>
+    }
+    if (log.delivered_at || log.status === 'sent') {
+      return <Badge className="bg-success text-success-foreground">Delivered</Badge>
+    }
+    if (log.status === 'failed') {
+      return <Badge variant="destructive">Failed</Badge>
+    }
+    return <Badge variant="secondary">Pending</Badge>
   }
 
   const formatDateTime = (dateString: string) => {
@@ -136,19 +135,15 @@ export default function EmailLogs() {
   }
 
   const handleRefresh = () => {
-    setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
+    fetchEmailLogs()
   }
 
   const statusCounts = {
-    all: mockEmails.length,
-    delivered: mockEmails.filter(e => e.status === "delivered").length,
-    opened: mockEmails.filter(e => e.status === "opened").length,
-    pending: mockEmails.filter(e => e.status === "pending").length,
-    failed: mockEmails.filter(e => e.status === "failed").length,
+    all: logs.length,
+    delivered: logs.filter(e => e.status === "sent" || e.delivered_at).length,
+    opened: logs.filter(e => e.opened_at).length,
+    pending: logs.filter(e => e.status === "pending").length,
+    failed: logs.filter(e => e.status === "failed" || e.bounced_at).length,
   }
 
   return (
@@ -283,45 +278,50 @@ export default function EmailLogs() {
                     <TableRow key={email.id}>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          {getStatusIcon(email.status)}
-                          {getStatusBadge(email.status)}
+                          {getStatusIcon(email)}
+                          {getStatusBadge(email)}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{email.to}</p>
-                          <p className="text-sm text-muted-foreground">from {email.from}</p>
+                          <p className="font-medium">{email.recipient_email}</p>
+                          <p className="text-sm text-muted-foreground">Campaign Email</p>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <p className="font-medium">{email.subject}</p>
-                        {email.error && (
-                          <p className="text-sm text-destructive">{email.error}</p>
+                        <p className="font-medium">{email.subject || 'No subject'}</p>
+                        {email.error_message && (
+                          <p className="text-sm text-destructive">{email.error_message}</p>
                         )}
                       </TableCell>
                       <TableCell>
-                        <p className="text-sm">{formatDateTime(email.createdAt)}</p>
-                        {email.deliveredAt && (
+                        <p className="text-sm">{formatDateTime(email.created_at)}</p>
+                        {email.delivered_at && (
                           <p className="text-xs text-muted-foreground">
-                            Delivered: {formatDateTime(email.deliveredAt)}
+                            Delivered: {formatDateTime(email.delivered_at)}
                           </p>
                         )}
-                        {email.openedAt && (
+                        {email.opened_at && (
                           <p className="text-xs text-muted-foreground">
-                            Opened: {formatDateTime(email.openedAt)}
+                            Opened: {formatDateTime(email.opened_at)}
+                          </p>
+                        )}
+                        {email.clicked_at && (
+                          <p className="text-xs text-success">
+                            Clicked: {formatDateTime(email.clicked_at)}
+                          </p>
+                        )}
+                        {email.bounced_at && (
+                          <p className="text-xs text-destructive">
+                            Bounced: {formatDateTime(email.bounced_at)}
                           </p>
                         )}
                       </TableCell>
                       <TableCell>
-                        {email.previewUrl && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => window.open(email.previewUrl, "_blank")}
-                          >
-                            <ExternalLink className="w-4 h-4 mr-1" />
-                            Preview
-                          </Button>
+                        {email.campaign_id && (
+                          <Badge variant="outline" className="text-xs">
+                            Campaign ID: {email.campaign_id.slice(0, 8)}...
+                          </Badge>
                         )}
                       </TableCell>
                     </TableRow>

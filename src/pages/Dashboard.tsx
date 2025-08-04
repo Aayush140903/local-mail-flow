@@ -1,7 +1,10 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/integrations/supabase/client"
 import { 
   Send, 
   CheckCircle, 
@@ -13,20 +16,88 @@ import {
   Activity
 } from "lucide-react"
 
+interface EmailLog {
+  id: string;
+  recipient_email: string;
+  subject: string | null;
+  status: string;
+  created_at: string;
+}
+
+interface DashboardStats {
+  totalSent: number;
+  deliveryRate: number;
+  openRate: number;
+  clickRate: number;
+  recentEmails: EmailLog[];
+}
+
 export default function Dashboard() {
-  // Mock data - replace with real data from your backend
-  const stats = {
-    totalSent: 12534,
-    deliveryRate: 98.5,
-    openRate: 24.3,
-    clickRate: 6.7,
-    recentEmails: [
-      { id: 1, to: "user@example.com", subject: "Welcome to our platform", status: "delivered", time: "2 minutes ago" },
-      { id: 2, to: "admin@company.com", subject: "Monthly report", status: "opened", time: "5 minutes ago" },
-      { id: 3, to: "support@service.com", subject: "System notification", status: "pending", time: "10 minutes ago" },
-      { id: 4, to: "team@startup.com", subject: "Product update", status: "failed", time: "15 minutes ago" },
-    ]
-  }
+  const [stats, setStats] = useState<DashboardStats>({
+    totalSent: 0,
+    deliveryRate: 0,
+    openRate: 0,
+    clickRate: 0,
+    recentEmails: []
+  });
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch recent email logs
+      const { data: emailLogs, error: logsError } = await supabase
+        .from('email_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (logsError) throw logsError;
+
+      // Calculate stats from email logs
+      const totalSent = emailLogs?.length || 0;
+      const delivered = emailLogs?.filter(log => log.status === 'sent' || log.status === 'delivered').length || 0;
+      const opened = emailLogs?.filter(log => log.opened_at).length || 0;
+      const clicked = emailLogs?.filter(log => log.clicked_at).length || 0;
+
+      const deliveryRate = totalSent > 0 ? (delivered / totalSent) * 100 : 0;
+      const openRate = totalSent > 0 ? (opened / totalSent) * 100 : 0;
+      const clickRate = totalSent > 0 ? (clicked / totalSent) * 100 : 0;
+
+      setStats({
+        totalSent,
+        deliveryRate: Math.round(deliveryRate * 10) / 10,
+        openRate: Math.round(openRate * 10) / 10,
+        clickRate: Math.round(clickRate * 10) / 10,
+        recentEmails: emailLogs?.slice(0, 4) || []
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch dashboard data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays} days ago`;
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -127,18 +198,24 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {stats.recentEmails.map((email) => (
-                <div key={email.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm truncate">{email.subject}</p>
-                    <p className="text-xs text-muted-foreground">{email.to}</p>
+              {loading ? (
+                <div className="text-sm text-muted-foreground">Loading recent emails...</div>
+              ) : stats.recentEmails.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No recent emails found</div>
+              ) : (
+                stats.recentEmails.map((email) => (
+                  <div key={email.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm truncate">{email.subject || 'No subject'}</p>
+                      <p className="text-xs text-muted-foreground">{email.recipient_email}</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      {getStatusBadge(email.status)}
+                      <span className="text-xs text-muted-foreground">{getTimeAgo(email.created_at)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    {getStatusBadge(email.status)}
-                    <span className="text-xs text-muted-foreground">{email.time}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/integrations/supabase/client"
 import { EmailBuilder } from "@/components/email-builder/EmailBuilder"
 import { EmailTemplates, EmailTemplate } from "@/components/email-builder/EmailTemplates"
 import { 
@@ -91,21 +92,63 @@ export default function SendEmail() {
 
     setIsLoading(true)
     
-    // Simulate sending email
-    setTimeout(() => {
-      setIsLoading(false)
+    try {
+      // First create a campaign for this send
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('You must be logged in to send emails');
+      }
+
+      const { data: campaign, error: campaignError } = await supabase.functions.invoke('create-campaign', {
+        body: {
+          name: `Quick Send - ${formData.subject}`,
+          description: 'Quick send email campaign',
+          type: 'one_time',
+          subject_line: formData.subject,
+          from_name: 'LocalMail',
+          from_email: formData.from,
+          content: formData.html
+        }
+      });
+
+      if (campaignError) throw campaignError;
+
+      // Now send the email using the campaign
+      const { data: sendResult, error: sendError } = await supabase.functions.invoke('send-email', {
+        body: {
+          campaignId: campaign.campaign.id,
+          to: recipients,
+          subject: formData.subject,
+          content: formData.html,
+          fromName: 'LocalMail',
+          fromEmail: formData.from
+        }
+      });
+
+      if (sendError) throw sendError;
+
       toast({
-        title: "Email queued successfully!",
+        title: "Email sent successfully!",
         description: `Email sent to ${recipients.length} recipient(s)`,
-      })
+      });
       
       // Reset form
-      setRecipients([])
+      setRecipients([]);
       setFormData({
         ...formData,
         subject: "",
-      })
-    }, 2000)
+      });
+
+    } catch (error: any) {
+      console.error('Send email error:', error);
+      toast({
+        title: "Failed to send email",
+        description: error.message || "An error occurred while sending the email",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const handlePreview = () => {
