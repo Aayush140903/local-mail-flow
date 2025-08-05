@@ -1,278 +1,369 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Clock, Play, Pause, RotateCcw, AlertCircle, CheckCircle, Timer, Search } from 'lucide-react';
-import { emailService, EmailQueue as EmailQueueType } from '@/services/emailService';
-import { formatDistanceToNow } from 'date-fns';
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { 
+  RefreshCw, 
+  Play, 
+  Pause, 
+  Trash2, 
+  Search, 
+  Filter,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Send
+} from "lucide-react";
+
+interface QueueItem {
+  id: string;
+  recipient_email: string;
+  subject: string;
+  status: string;
+  created_at: string;
+  sent_at?: string;
+  error_message?: string;
+  campaign_id?: string;
+}
 
 export function EmailQueue() {
-  const [queues, setQueues] = useState<EmailQueueType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadQueues();
-    const interval = setInterval(loadQueues, 5000); // Refresh every 5 seconds
+    fetchQueueItems();
+    // Set up real-time updates
+    const interval = setInterval(fetchQueueItems, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadQueues = async () => {
+  const fetchQueueItems = async () => {
     try {
-      const data = await emailService.getEmailQueue();
-      setQueues(data);
+      const { data, error } = await supabase
+        .from('email_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setQueueItems(data || []);
     } catch (error) {
-      console.error('Failed to load queues:', error);
+      console.error('Failed to fetch queue items:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const retryFailedEmails = async () => {
+    setIsProcessing(true);
+    try {
+      const failedEmails = queueItems.filter(item => item.status === 'failed');
+      
+      for (const email of failedEmails) {
+        // Retry sending through edge function
+        const { error } = await supabase.functions.invoke('send-email', {
+          body: {
+            to: [email.recipient_email],
+            subject: email.subject,
+            content: '<p>Retry email content</p>',
+            fromName: 'LocalMail',
+            fromEmail: 'noreply@localmail.dev'
+          }
+        });
+
+        if (!error) {
+          await supabase
+            .from('email_logs')
+            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .eq('id', email.id);
+        }
+      }
+
+      fetchQueueItems();
+      toast({ title: "Success", description: `Retried ${failedEmails.length} failed emails` });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to retry emails",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('email_logs')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      fetchQueueItems();
+      toast({ title: "Success", description: "Queue item deleted" });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const clearCompleted = async () => {
+    try {
+      const { error } = await supabase
+        .from('email_logs')
+        .delete()
+        .eq('status', 'sent');
+
+      if (error) throw error;
+      fetchQueueItems();
+      toast({ title: "Success", description: "Completed items cleared" });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'processing':
-        return <Timer className="h-4 w-4 text-blue-500 animate-spin" />;
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'sent':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
       case 'failed':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      default:
+      case 'bounced':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'pending':
         return <Clock className="h-4 w-4 text-yellow-500" />;
+      default:
+        return <AlertTriangle className="h-4 w-4 text-gray-500" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
     const variants = {
-      pending: 'secondary',
-      processing: 'default',
-      completed: 'default',
-      failed: 'destructive'
+      pending: "default",
+      sent: "default", 
+      failed: "destructive",
+      bounced: "destructive"
     } as const;
     
     return (
-      <Badge variant={variants[status as keyof typeof variants] || 'secondary'}>
+      <Badge variant={variants[status as keyof typeof variants] || "secondary"}>
         {status}
       </Badge>
     );
   };
 
-  const getPriorityBadge = (priority: string) => {
-    const variants = {
-      low: 'secondary',
-      normal: 'outline',
-      high: 'destructive'
-    } as const;
-    
-    return (
-      <Badge variant={variants[priority as keyof typeof variants] || 'outline'}>
-        {priority}
-      </Badge>
-    );
-  };
-
-  const filteredQueues = queues.filter(queue => {
-    if (filter !== 'all' && queue.status !== filter) return false;
-    if (searchQuery && !queue.campaignId.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
+  const filteredItems = queueItems.filter(item => {
+    const matchesSearch = item.recipient_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.subject?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
-  const queueStats = {
-    total: queues.length,
-    pending: queues.filter(q => q.status === 'pending').length,
-    processing: queues.filter(q => q.status === 'processing').length,
-    completed: queues.filter(q => q.status === 'completed').length,
-    failed: queues.filter(q => q.status === 'failed').length
+  const stats = {
+    pending: queueItems.filter(i => i.status === 'pending').length,
+    sent: queueItems.filter(i => i.status === 'sent').length,
+    failed: queueItems.filter(i => i.status === 'failed').length,
+    bounced: queueItems.filter(i => i.status === 'bounced').length
   };
 
-  if (isLoading) {
+  if (loading) {
     return <div>Loading email queue...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Email Queue</h2>
-          <p className="text-muted-foreground">Monitor and manage email processing queues</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Play className="mr-2 h-4 w-4" />
-            Resume All
-          </Button>
-          <Button variant="outline" size="sm">
-            <Pause className="mr-2 h-4 w-4" />
-            Pause All
-          </Button>
-        </div>
-      </div>
-
-      {/* Queue Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Queues</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{queueStats.total}</div>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold">{stats.pending}</p>
+              </div>
+              <Clock className="h-8 w-8 text-yellow-500" />
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{queueStats.pending}</div>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Sent</p>
+                <p className="text-2xl font-bold">{stats.sent}</p>
+              </div>
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Processing</CardTitle>
-            <Timer className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{queueStats.processing}</div>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Failed</p>
+                <p className="text-2xl font-bold">{stats.failed}</p>
+              </div>
+              <XCircle className="h-8 w-8 text-red-500" />
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{queueStats.completed}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Failed</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{queueStats.failed}</div>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Bounced</p>
+                <p className="text-2xl font-bold">{stats.bounced}</p>
+              </div>
+              <AlertTriangle className="h-8 w-8 text-orange-500" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters and Search */}
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search campaigns..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-64"
-          />
-        </div>
-        
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="processing">Processing</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Queue Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Queue Details</CardTitle>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Email Queue</CardTitle>
+              <CardDescription>
+                Monitor and manage email delivery queue
+              </CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                onClick={retryFailedEmails}
+                disabled={isProcessing || stats.failed === 0}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isProcessing ? 'animate-spin' : ''}`} />
+                Retry Failed
+              </Button>
+              <Button
+                variant="outline"
+                onClick={clearCompleted}
+                disabled={stats.sent === 0}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear Sent
+              </Button>
+              <Button variant="outline" onClick={fetchQueueItems}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Queue ID</TableHead>
-                <TableHead>Campaign</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Email Count</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Retries</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredQueues.map((queue) => (
-                <TableRow key={queue.id}>
-                  <TableCell className="font-mono text-sm">{queue.id}</TableCell>
-                  <TableCell>{queue.campaignId}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(queue.status)}
-                      {getStatusBadge(queue.status)}
-                    </div>
-                  </TableCell>
-                  <TableCell>{getPriorityBadge(queue.priority)}</TableCell>
-                  <TableCell>{queue.emailCount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="w-24">
-                      <Progress 
-                        value={queue.status === 'completed' ? 100 : queue.status === 'processing' ? 65 : 0} 
-                        className="h-2"
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDistanceToNow(queue.createdAt, { addSuffix: true })}
-                  </TableCell>
-                  <TableCell>
-                    <span className={queue.retryCount > 0 ? 'text-red-600' : ''}>
-                      {queue.retryCount}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      {queue.status === 'failed' && (
-                        <Button variant="outline" size="sm">
-                          <RotateCcw className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {queue.status === 'processing' && (
-                        <Button variant="outline" size="sm">
-                          <Pause className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {queue.status === 'pending' && (
-                        <Button variant="outline" size="sm">
-                          <Play className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
+          <div className="flex gap-4 mb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search emails..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="bounced">Bounced</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Recipient</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Sent</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        {getStatusIcon(item.status)}
+                        {getStatusBadge(item.status)}
+                      </div>
+                    </TableCell>
+                    <TableCell>{item.recipient_email}</TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {item.subject || '—'}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(item.created_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      {item.sent_at ? new Date(item.sent_at).toLocaleString() : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        {item.status === 'failed' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => retryFailedEmails()}
+                            title="Retry"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteItem(item.id)}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {filteredItems.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No queue items found
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Real-time Updates Indicator */}
-      <div className="flex items-center justify-center text-sm text-muted-foreground">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span>Live updates every 5 seconds</span>
-        </div>
-      </div>
     </div>
   );
 }

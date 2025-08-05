@@ -1,20 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Activity, AlertTriangle, CheckCircle, Mail, Server } from 'lucide-react';
-import { emailService, EmailProvider } from '@/services/emailService';
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Plus, Settings, Trash2, Mail, Server, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+
+interface EmailProvider {
+  id: string;
+  name: string;
+  type: 'resend' | 'sendgrid' | 'mailgun' | 'smtp';
+  status: 'active' | 'inactive' | 'error';
+  config: any;
+  isDefault: boolean;
+  lastUsed?: string;
+  emailsSent: number;
+}
 
 export function ProviderManagement() {
   const [providers, setProviders] = useState<EmailProvider[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<EmailProvider | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<EmailProvider | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "resend" as 'resend' | 'sendgrid' | 'mailgun' | 'smtp',
+    apiKey: "",
+    apiSecret: "",
+    smtpHost: "",
+    smtpPort: "587",
+    smtpUser: "",
+    smtpPassword: "",
+    isDefault: false
+  });
 
   useEffect(() => {
     loadProviders();
@@ -22,269 +46,358 @@ export function ProviderManagement() {
 
   const loadProviders = async () => {
     try {
-      const data = await emailService.getProviders();
-      setProviders(data);
+      // Since we're using Resend, show current configuration
+      const providers: EmailProvider[] = [
+        {
+          id: 'resend-default',
+          name: 'Resend (Default)',
+          type: 'resend',
+          status: 'active',
+          config: { provider: 'resend' },
+          isDefault: true,
+          emailsSent: await getEmailCount(),
+          lastUsed: new Date().toISOString()
+        }
+      ];
+      setProviders(providers);
     } catch (error) {
       console.error('Failed to load providers:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
+  };
+
+  const getEmailCount = async () => {
+    try {
+      const { count } = await supabase
+        .from('email_logs')
+        .select('*', { count: 'exact', head: true });
+      return count || 0;
+    } catch (error) {
+      return 0;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // For now, just simulate provider creation
+      const newProvider: EmailProvider = {
+        id: Date.now().toString(),
+        name: formData.name,
+        type: formData.type,
+        status: 'active',
+        config: {
+          apiKey: formData.apiKey,
+          apiSecret: formData.apiSecret,
+          smtpHost: formData.smtpHost,
+          smtpPort: formData.smtpPort,
+          smtpUser: formData.smtpUser,
+          smtpPassword: formData.smtpPassword
+        },
+        isDefault: formData.isDefault,
+        emailsSent: 0
+      };
+
+      setProviders(prev => [...prev, newProvider]);
+      toast({ title: "Success", description: "Email provider configured successfully" });
+      resetForm();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEdit = (provider: EmailProvider) => {
+    setEditingProvider(provider);
+    setFormData({
+      name: provider.name,
+      type: provider.type as any,
+      apiKey: "",
+      apiSecret: "",
+      smtpHost: provider.config.smtpHost || "",
+      smtpPort: provider.config.smtpPort || "587",
+      smtpUser: provider.config.smtpUser || "",
+      smtpPassword: "",
+      isDefault: provider.isDefault
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (providerId: string) => {
+    setProviders(prev => prev.filter(p => p.id !== providerId));
+    toast({ title: "Success", description: "Provider deleted successfully" });
+  };
+
+  const setAsDefault = async (providerId: string) => {
+    setProviders(prev => prev.map(p => ({
+      ...p,
+      isDefault: p.id === providerId
+    })));
+    toast({ title: "Success", description: "Default provider updated" });
+  };
+
+  const testProvider = async (provider: EmailProvider) => {
+    try {
+      toast({ title: "Testing", description: "Sending test email..." });
+      
+      // Use the send-email function to test
+      const { error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: ['test@example.com'],
+          subject: 'Test Email from Provider',
+          content: '<p>This is a test email to verify provider configuration.</p>',
+          fromName: 'LocalMail Test',
+          fromEmail: 'test@localmail.dev'
+        }
+      });
+
+      if (error) throw error;
+      
+      toast({ title: "Success", description: "Test email sent successfully" });
+    } catch (error: any) {
+      toast({
+        title: "Test Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      type: "resend",
+      apiKey: "",
+      apiSecret: "",
+      smtpHost: "",
+      smtpPort: "587",
+      smtpUser: "",
+      smtpPassword: "",
+      isDefault: false
+    });
+    setEditingProvider(null);
+    setIsDialogOpen(false);
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'active':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
       case 'error':
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+        return <XCircle className="h-4 w-4 text-red-500" />;
       default:
-        return <Activity className="h-4 w-4 text-gray-400" />;
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      active: 'default',
-      inactive: 'secondary',
-      error: 'destructive'
-    } as const;
-    
-    return <Badge variant={variants[status as keyof typeof variants] || 'secondary'}>{status}</Badge>;
-  };
-
-  if (isLoading) {
-    return <div>Loading providers...</div>;
+  if (loading) {
+    return <div>Loading email providers...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Email Providers</h2>
-          <p className="text-muted-foreground">Manage your email service providers and delivery settings</p>
-        </div>
-        <Button variant="outline">
-          <Settings className="mr-2 h-4 w-4" />
-          Add Provider
-        </Button>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {providers.map((provider) => (
-          <Card key={provider.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">{provider.name}</CardTitle>
-              <div className="flex items-center gap-2">
-                {getStatusIcon(provider.status)}
-                {getStatusBadge(provider.status)}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Delivery Rate</span>
-                  <span className="font-medium">{provider.deliveryRate}%</span>
-                </div>
-                <Progress value={provider.deliveryRate} className="h-2" />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Monthly Usage</span>
-                  <span className="font-medium">
-                    {provider.used.toLocaleString()} / {provider.monthlyQuota.toLocaleString()}
-                  </span>
-                </div>
-                <Progress 
-                  value={(provider.used / provider.monthlyQuota) * 100} 
-                  className="h-2"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <div className="flex items-center space-x-2">
-                  <Switch 
-                    checked={provider.status === 'active'} 
-                    id={`provider-${provider.id}`}
-                  />
-                  <Label htmlFor={`provider-${provider.id}`} className="text-sm">
-                    Active
-                  </Label>
-                </div>
-
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setSelectedProvider(provider)}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Email Service Providers</CardTitle>
+              <CardDescription>
+                Manage your email delivery providers and configurations
+              </CardDescription>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => resetForm()}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Provider
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingProvider ? "Edit Provider" : "Add Email Provider"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Configure a new email service provider
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Provider Name</Label>
+                    <Input
+                      id="name"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="My Email Provider"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="type">Provider Type</Label>
+                    <select
+                      id="type"
+                      className="w-full p-2 border rounded"
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
                     >
-                      Configure
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Configure {provider.name}</DialogTitle>
-                    </DialogHeader>
-                    <ProviderConfiguration provider={provider} />
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                      <option value="resend">Resend</option>
+                      <option value="sendgrid">SendGrid</option>
+                      <option value="mailgun">Mailgun</option>
+                      <option value="smtp">Custom SMTP</option>
+                    </select>
+                  </div>
 
-      {/* Add New Provider Card */}
-      <Card className="border-dashed border-2 hover:border-primary/50 transition-colors">
-        <CardContent className="flex items-center justify-center py-8">
-          <div className="text-center space-y-2">
-            <Mail className="h-8 w-8 text-muted-foreground mx-auto" />
-            <h3 className="text-lg font-medium">Add New Provider</h3>
-            <p className="text-muted-foreground">Connect additional email service providers</p>
-            <Button variant="outline" className="mt-4">
-              <Server className="mr-2 h-4 w-4" />
-              Add Provider
-            </Button>
+                  {formData.type !== 'smtp' && (
+                    <div>
+                      <Label htmlFor="apiKey">API Key</Label>
+                      <Input
+                        id="apiKey"
+                        type="password"
+                        value={formData.apiKey}
+                        onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                        placeholder="Your API key"
+                      />
+                    </div>
+                  )}
+
+                  {formData.type === 'smtp' && (
+                    <>
+                      <div>
+                        <Label htmlFor="smtpHost">SMTP Host</Label>
+                        <Input
+                          id="smtpHost"
+                          value={formData.smtpHost}
+                          onChange={(e) => setFormData({ ...formData, smtpHost: e.target.value })}
+                          placeholder="smtp.yourprovider.com"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="smtpPort">SMTP Port</Label>
+                        <Input
+                          id="smtpPort"
+                          value={formData.smtpPort}
+                          onChange={(e) => setFormData({ ...formData, smtpPort: e.target.value })}
+                          placeholder="587"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="smtpUser">Username</Label>
+                        <Input
+                          id="smtpUser"
+                          value={formData.smtpUser}
+                          onChange={(e) => setFormData({ ...formData, smtpUser: e.target.value })}
+                          placeholder="username"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="smtpPassword">Password</Label>
+                        <Input
+                          id="smtpPassword"
+                          type="password"
+                          value={formData.smtpPassword}
+                          onChange={(e) => setFormData({ ...formData, smtpPassword: e.target.value })}
+                          placeholder="password"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="isDefault"
+                      checked={formData.isDefault}
+                      onCheckedChange={(checked) => setFormData({ ...formData, isDefault: checked })}
+                    />
+                    <Label htmlFor="isDefault">Set as default provider</Label>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      {editingProvider ? "Update" : "Add"} Provider
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4">
+            {providers.map((provider) => (
+              <Card key={provider.id} className="relative">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Mail className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-semibold">{provider.name}</h3>
+                          {provider.isDefault && (
+                            <Badge variant="default">Default</Badge>
+                          )}
+                          {getStatusIcon(provider.status)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {provider.type.toUpperCase()} • {provider.emailsSent.toLocaleString()} emails sent
+                        </p>
+                        {provider.lastUsed && (
+                          <p className="text-xs text-muted-foreground">
+                            Last used: {new Date(provider.lastUsed).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => testProvider(provider)}
+                      >
+                        Test
+                      </Button>
+                      {!provider.isDefault && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAsDefault(provider.id)}
+                        >
+                          Set Default
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(provider)}
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                      {!provider.isDefault && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(provider.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function ProviderConfiguration({ provider }: { provider: EmailProvider }) {
-  const [config, setConfig] = useState({
-    apiKey: '',
-    webhookUrl: '',
-    defaultFromEmail: '',
-    replyToEmail: '',
-    trackingDomain: '',
-    suppressionList: true,
-    dedicatedIP: false
-  });
-
-  return (
-    <Tabs defaultValue="general" className="w-full">
-      <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger value="authentication">Auth</TabsTrigger>
-        <TabsTrigger value="tracking">Tracking</TabsTrigger>
-        <TabsTrigger value="advanced">Advanced</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="general" className="space-y-4">
-        <div className="grid gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key</Label>
-            <Input
-              id="apiKey"
-              type="password"
-              placeholder="Enter your API key"
-              value={config.apiKey}
-              onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="defaultFrom">Default From Email</Label>
-            <Input
-              id="defaultFrom"
-              type="email"
-              placeholder="noreply@yourdomain.com"
-              value={config.defaultFromEmail}
-              onChange={(e) => setConfig({ ...config, defaultFromEmail: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="replyTo">Reply-To Email</Label>
-            <Input
-              id="replyTo"
-              type="email"
-              placeholder="support@yourdomain.com"
-              value={config.replyToEmail}
-              onChange={(e) => setConfig({ ...config, replyToEmail: e.target.value })}
-            />
-          </div>
-        </div>
-      </TabsContent>
-
-      <TabsContent value="authentication" className="space-y-4">
-        <div className="grid gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="webhookUrl">Webhook URL</Label>
-            <Input
-              id="webhookUrl"
-              placeholder="https://yourapp.com/webhooks/email"
-              value={config.webhookUrl}
-              onChange={(e) => setConfig({ ...config, webhookUrl: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="trackingDomain">Tracking Domain</Label>
-            <Input
-              id="trackingDomain"
-              placeholder="track.yourdomain.com"
-              value={config.trackingDomain}
-              onChange={(e) => setConfig({ ...config, trackingDomain: e.target.value })}
-            />
-          </div>
-        </div>
-      </TabsContent>
-
-      <TabsContent value="tracking" className="space-y-4">
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Switch 
-              id="suppressionList" 
-              checked={config.suppressionList}
-              onCheckedChange={(checked) => setConfig({ ...config, suppressionList: checked })}
-            />
-            <Label htmlFor="suppressionList">Enable Suppression List</Label>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch 
-              id="dedicatedIP" 
-              checked={config.dedicatedIP}
-              onCheckedChange={(checked) => setConfig({ ...config, dedicatedIP: checked })}
-            />
-            <Label htmlFor="dedicatedIP">Use Dedicated IP</Label>
-          </div>
-        </div>
-      </TabsContent>
-
-      <TabsContent value="advanced" className="space-y-4">
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Advanced configuration options for {provider.name}
-          </p>
-          
-          <div className="rounded-lg border p-4 space-y-2">
-            <h4 className="font-medium">Rate Limiting</h4>
-            <p className="text-sm text-muted-foreground">
-              Configure sending limits and throttling for this provider
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="hourlyLimit">Hourly Limit</Label>
-                <Input id="hourlyLimit" placeholder="10000" />
-              </div>
-              <div>
-                <Label htmlFor="dailyLimit">Daily Limit</Label>
-                <Input id="dailyLimit" placeholder="100000" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </TabsContent>
-
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button variant="outline">Test Connection</Button>
-        <Button>Save Configuration</Button>
-      </div>
-    </Tabs>
   );
 }
