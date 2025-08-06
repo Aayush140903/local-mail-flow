@@ -165,8 +165,8 @@ export default function SendEmail() {
   }
 
   const handleTemplateSelect = (template: EmailTemplate) => {
-    setFormData(prev => ({ ...prev, html: template.html }))
-    setEmailComponents(template.components)
+    setFormData(prev => ({ ...prev, html: template.content }))
+    setEmailComponents([])
     setActiveTab('builder')
     toast({
       title: "Template Applied",

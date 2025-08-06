@@ -107,6 +107,30 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_drafts: {
+        Row: {
+          created_at: string
+          draft_data: Json
+          id: string
+          last_saved_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          draft_data?: Json
+          id?: string
+          last_saved_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          draft_data?: Json
+          id?: string
+          last_saved_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       campaign_emails: {
         Row: {
           campaign_id: string
@@ -439,6 +463,45 @@ export type Database = {
           },
         ]
       }
+      email_templates: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          content: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gdpr_requests: {
         Row: {
           completed_at: string | null
@@ -533,6 +596,42 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          created_at: string
+          default_from_email: string | null
+          default_from_name: string | null
+          default_reply_to: string | null
+          email_signature: string | null
+          id: string
+          settings: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_from_email?: string | null
+          default_from_name?: string | null
+          default_reply_to?: string | null
+          email_signature?: string | null
+          id?: string
+          settings?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          default_from_email?: string | null
+          default_from_name?: string | null
+          default_reply_to?: string | null
+          email_signature?: string | null
+          id?: string
+          settings?: Json | null
           updated_at?: string
           user_id?: string
         }
