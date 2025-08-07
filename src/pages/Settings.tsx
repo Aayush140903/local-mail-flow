@@ -15,6 +15,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { UserProfile } from "@/components/profile/UserProfile"
+import { PageTooltip } from "@/components/shared/PageTooltip"
+import { supabase } from "@/integrations/supabase/client"
 import { 
   Settings as SettingsIcon, 
   Save, 
@@ -27,6 +29,8 @@ import {
   User
 } from "lucide-react"
 
+import React from "react";
+
 export default function Settings() {
   const { toast } = useToast()
   const [isSaving, setIsSaving] = useState(false)
@@ -38,6 +42,35 @@ export default function Settings() {
     replyToEmail: "support@localmail.dev",
     bounceEmail: "bounce@localmail.dev"
   })
+
+  // Load settings on component mount
+  React.useEffect(() => {
+    loadUserSettings();
+  }, []);
+
+  const loadUserSettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (settings) {
+        setEmailSettings({
+          defaultFromEmail: settings.default_from_email || "noreply@localmail.dev",
+          defaultFromName: settings.default_from_name || "LocalMail Platform",
+          replyToEmail: settings.default_reply_to || "support@localmail.dev",
+          bounceEmail: "bounce@localmail.dev"
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  };
 
   const [serverSettings, setServerSettings] = useState({
     smtpHost: "localhost",
@@ -66,25 +99,70 @@ export default function Settings() {
   })
 
   const handleSave = async (section: string) => {
-    setIsSaving(true)
+    setIsSaving(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false)
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be logged in');
+
+      if (section === 'Email') {
+        const { error } = await supabase
+          .from('user_settings')
+          .upsert({
+            user_id: user.id,
+            default_from_name: emailSettings.defaultFromName,
+            default_from_email: emailSettings.defaultFromEmail,
+            default_reply_to: emailSettings.replyToEmail,
+          });
+
+        if (error) throw error;
+      }
+
       toast({
         title: "Settings saved",
         description: `${section} settings have been updated successfully`,
-      })
-    }, 1000)
-  }
+      });
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Configure your LocalMail platform settings</p>
+        <div className="flex items-center space-x-4">
+          <div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-muted-foreground">Configure your LocalMail platform settings</p>
+          </div>
+          <PageTooltip 
+            title="Settings Guide"
+            description="Configure your platform settings for optimal performance"
+            features={[
+              {
+                title: "Profile Settings",
+                description: "Manage your personal profile information",
+                steps: ["Update display name", "Change avatar", "Set company info", "Update contact details"]
+              },
+              {
+                title: "Email Settings",
+                description: "Configure default email settings",
+                steps: ["Set default from email", "Set default from name", "Configure reply-to address", "Set email signature"]
+              },
+              {
+                title: "Server Settings",
+                description: "Configure SMTP and server options",
+                steps: ["Set SMTP credentials", "Configure sending limits", "Set retry policies", "Test connection"]
+              }
+            ]}
+          />
         </div>
       </div>
 

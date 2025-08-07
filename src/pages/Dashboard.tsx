@@ -15,6 +15,7 @@ import {
   Users,
   Activity
 } from "lucide-react"
+import { Link } from "react-router-dom"
 
 interface EmailLog {
   id: string;
@@ -49,20 +50,27 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch recent email logs
-      const { data: emailLogs, error: logsError } = await supabase
+      // Fetch all email logs for comprehensive stats
+      const { data: allEmailLogs, error: allLogsError } = await supabase
+        .from('email_logs')
+        .select('*');
+
+      if (allLogsError) throw allLogsError;
+
+      // Fetch recent email logs for display
+      const { data: recentEmailLogs, error: recentLogsError } = await supabase
         .from('email_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (logsError) throw logsError;
+      if (recentLogsError) throw recentLogsError;
 
-      // Calculate stats from email logs
-      const totalSent = emailLogs?.length || 0;
-      const delivered = emailLogs?.filter(log => log.status === 'sent' || log.status === 'delivered').length || 0;
-      const opened = emailLogs?.filter(log => log.opened_at).length || 0;
-      const clicked = emailLogs?.filter(log => log.clicked_at).length || 0;
+      // Calculate comprehensive stats from all email logs
+      const totalSent = allEmailLogs?.length || 0;
+      const delivered = allEmailLogs?.filter(log => log.status === 'sent' || log.status === 'delivered' || log.delivered_at).length || 0;
+      const opened = allEmailLogs?.filter(log => log.opened_at).length || 0;
+      const clicked = allEmailLogs?.filter(log => log.clicked_at).length || 0;
 
       const deliveryRate = totalSent > 0 ? (delivered / totalSent) * 100 : 0;
       const openRate = totalSent > 0 ? (opened / totalSent) * 100 : 0;
@@ -73,7 +81,7 @@ export default function Dashboard() {
         deliveryRate: Math.round(deliveryRate * 10) / 10,
         openRate: Math.round(openRate * 10) / 10,
         clickRate: Math.round(clickRate * 10) / 10,
-        recentEmails: emailLogs?.slice(0, 4) || []
+        recentEmails: recentEmailLogs?.slice(0, 4) || []
       });
     } catch (error: any) {
       toast({
@@ -229,17 +237,23 @@ export default function Dashboard() {
             <CardDescription>Common tasks and shortcuts</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button className="w-full justify-start" size="lg">
-              <Send className="w-4 h-4 mr-2" />
-              Send New Email
+            <Button asChild className="w-full justify-start" size="lg">
+              <Link to="/send-email">
+                <Send className="w-4 h-4 mr-2" />
+                Send New Email
+              </Link>
             </Button>
-            <Button variant="outline" className="w-full justify-start" size="lg">
-              <Activity className="w-4 h-4 mr-2" />
-              View Analytics
+            <Button asChild variant="outline" className="w-full justify-start" size="lg">
+              <Link to="/analytics">
+                <Activity className="w-4 h-4 mr-2" />
+                View Analytics
+              </Link>
             </Button>
-            <Button variant="outline" className="w-full justify-start" size="lg">
-              <Users className="w-4 h-4 mr-2" />
-              Manage Contacts
+            <Button asChild variant="outline" className="w-full justify-start" size="lg">
+              <Link to="/contacts">
+                <Users className="w-4 h-4 mr-2" />
+                Manage Contacts
+              </Link>
             </Button>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,9 @@ import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { EmailBuilder } from "@/components/email-builder/EmailBuilder"
 import { EmailTemplates, EmailTemplate } from "@/components/email-builder/EmailTemplates"
+import { AudienceSelector } from "@/components/send-email/AudienceSelector"
+import { PageTooltip } from "@/components/shared/PageTooltip"
+import { useDraftAutoSave, loadDraft } from "@/hooks/useDraftAutoSave"
 import { 
   Send, 
   Eye, 
@@ -20,8 +23,19 @@ import {
   X,
   Palette,
   FileText,
-  Wand2
+  Wand2,
+  Users,
+  Download,
+  HelpCircle
 } from "lucide-react"
+
+interface AudienceSelection {
+  type: 'list' | 'segment' | 'contacts';
+  id: string;
+  name: string;
+  count: number;
+  emails?: string[];
+}
 
 export default function SendEmail() {
   const { toast } = useToast()
@@ -30,6 +44,8 @@ export default function SendEmail() {
   const [currentRecipient, setCurrentRecipient] = useState("")
   const [activeTab, setActiveTab] = useState<'builder' | 'templates' | 'code'>('templates')
   const [emailComponents, setEmailComponents] = useState<any[]>([])
+  const [selectedAudience, setSelectedAudience] = useState<AudienceSelection | undefined>()
+  const [showAudienceSelector, setShowAudienceSelector] = useState(false)
   const [formData, setFormData] = useState({
     from: "noreply@localmail.dev",
     subject: "",
@@ -60,6 +76,31 @@ export default function SendEmail() {
 </html>`
   })
 
+  // Auto-save drafts and load existing draft
+  const draftData = {
+    formData,
+    recipients,
+    selectedAudience,
+  };
+  
+  const { saveDraftNow } = useDraftAutoSave(draftData, true);
+
+  useEffect(() => {
+    const loadExistingDraft = async () => {
+      const draft = await loadDraft();
+      if (draft && typeof draft === 'object') {
+        if ((draft as any).formData) setFormData((draft as any).formData);
+        if ((draft as any).recipients) setRecipients((draft as any).recipients);
+        if ((draft as any).selectedAudience) setSelectedAudience((draft as any).selectedAudience);
+        toast({
+          title: "Draft loaded",
+          description: "Your previous work has been restored",
+        });
+      }
+    };
+    loadExistingDraft();
+  }, [toast]);
+
   const addRecipient = () => {
     if (currentRecipient && !recipients.includes(currentRecipient)) {
       setRecipients([...recipients, currentRecipient])
@@ -72,10 +113,16 @@ export default function SendEmail() {
   }
 
   const handleSend = async () => {
-    if (recipients.length === 0) {
+    // Determine final recipient list
+    let finalRecipients = recipients;
+    if (selectedAudience?.emails && selectedAudience.emails.length > 0) {
+      finalRecipients = selectedAudience.emails;
+    }
+
+    if (finalRecipients.length === 0) {
       toast({
         title: "No recipients",
-        description: "Please add at least one recipient",
+        description: "Please select an audience or add recipients manually",
         variant: "destructive"
       })
       return
@@ -117,7 +164,7 @@ export default function SendEmail() {
       const { data: sendResult, error: sendError } = await supabase.functions.invoke('send-email', {
         body: {
           campaignId: campaign.campaign.id,
-          to: recipients,
+          to: finalRecipients,
           subject: formData.subject,
           content: formData.html,
           fromName: 'LocalMail',
@@ -129,11 +176,12 @@ export default function SendEmail() {
 
       toast({
         title: "Email sent successfully!",
-        description: `Email sent to ${recipients.length} recipient(s)`,
+        description: `Email sent to ${finalRecipients.length} recipient(s)`,
       });
       
       // Reset form
       setRecipients([]);
+      setSelectedAudience(undefined);
       setFormData({
         ...formData,
         subject: "",
@@ -164,6 +212,70 @@ export default function SendEmail() {
     setEmailComponents(components)
   }
 
+  const handleAudienceSelect = (audience: AudienceSelection) => {
+    setSelectedAudience(audience);
+    setRecipients(audience.emails || []);
+    toast({
+      title: "Audience Selected",
+      description: `Selected ${audience.name} with ${audience.count} contacts`,
+    });
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!formData.html.trim()) {
+      toast({
+        title: "No content",
+        description: "Please add email content before saving as template",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('You must be logged in');
+
+      const { error } = await supabase
+        .from('email_templates')
+        .insert({
+          name: formData.subject || 'Untitled Template',
+          content: formData.html,
+          category: 'custom',
+          user_id: user.id
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Template saved",
+        description: "Your email has been saved as a template",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleExportHTML = () => {
+    const blob = new Blob([formData.html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${formData.subject || 'email'}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "HTML exported",
+      description: "Email HTML has been downloaded",
+    });
+  };
+
   const handleTemplateSelect = (template: EmailTemplate) => {
     setFormData(prev => ({ ...prev, html: template.content }))
     setEmailComponents([])
@@ -177,9 +289,32 @@ export default function SendEmail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Email Campaign Builder</h1>
-          <p className="text-muted-foreground">Create beautiful, professional emails with our advanced builder</p>
+        <div className="flex items-center space-x-4">
+          <div>
+            <h1 className="text-3xl font-bold">Email Campaign Builder</h1>
+            <p className="text-muted-foreground">Create beautiful, professional emails with our advanced builder</p>
+          </div>
+          <PageTooltip 
+            title="Email Campaign Builder Guide"
+            description="Learn how to create and send professional email campaigns"
+            features={[
+              {
+                title: "Audience Selection",
+                description: "Choose who receives your email",
+                steps: ["Click 'Select Audience'", "Choose from lists, segments, or contacts", "Review selection"]
+              },
+              {
+                title: "Email Design",
+                description: "Create beautiful emails with templates or builder",
+                steps: ["Select a template", "Customize using visual builder", "Edit HTML if needed"]
+              },
+              {
+                title: "Preview & Send",
+                description: "Test and send your campaign",
+                steps: ["Preview your email", "Review recipients", "Click Send Email"]
+              }
+            ]}
+          />
         </div>
         <div className="flex space-x-2">
           <Button variant="outline" onClick={handlePreview}>
@@ -228,36 +363,69 @@ export default function SendEmail() {
             </div>
           </div>
 
-          {/* Recipients */}
+          {/* Audience Selection */}
           <div className="space-y-2">
-            <Label>Recipients</Label>
-            <div className="flex space-x-2">
-              <Input
-                value={currentRecipient}
-                onChange={(e) => setCurrentRecipient(e.target.value)}
-                placeholder="recipient@example.com"
-                onKeyPress={(e) => e.key === "Enter" && addRecipient()}
-              />
-              <Button type="button" onClick={addRecipient} variant="outline">
-                <Plus className="w-4 h-4" />
+            <Label>Audience</Label>
+            <div className="space-y-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full h-auto p-4 justify-start"
+                onClick={() => setShowAudienceSelector(true)}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                <div className="text-left">
+                  {selectedAudience ? (
+                    <div>
+                      <div className="font-medium">{selectedAudience.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {selectedAudience.count} contacts selected
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="font-medium">Select Audience</div>
+                      <div className="text-sm text-muted-foreground">
+                        Choose from lists, segments, or individual contacts
+                      </div>
+                    </div>
+                  )}
+                </div>
               </Button>
-            </div>
-            
-            {recipients.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {recipients.map((email) => (
-                  <Badge key={email} variant="secondary" className="flex items-center space-x-1">
-                    <span>{email}</span>
-                    <button
-                      onClick={() => removeRecipient(email)}
-                      className="ml-1 hover:text-destructive"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
+
+              {/* Manual Recipients - Optional */}
+              <div className="pt-2 border-t">
+                <Label className="text-sm text-muted-foreground">Or add individual recipients:</Label>
+                <div className="flex space-x-2 mt-2">
+                  <Input
+                    value={currentRecipient}
+                    onChange={(e) => setCurrentRecipient(e.target.value)}
+                    placeholder="recipient@example.com"
+                    onKeyPress={(e) => e.key === "Enter" && addRecipient()}
+                    className="text-sm"
+                  />
+                  <Button type="button" onClick={addRecipient} variant="outline" size="sm">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                {recipients.length > 0 && !selectedAudience && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {recipients.map((email) => (
+                      <Badge key={email} variant="secondary" className="flex items-center space-x-1">
+                        <span>{email}</span>
+                        <button
+                          onClick={() => removeRecipient(email)}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -390,7 +558,9 @@ export default function SendEmail() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Recipients:</span>
-                  <span className="font-medium">{recipients.length}</span>
+                  <span className="font-medium">
+                    {selectedAudience ? selectedAudience.count : recipients.length}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">From:</span>
@@ -425,18 +595,25 @@ export default function SendEmail() {
                 <Eye className="w-4 h-4 mr-2" />
                 Preview in New Tab
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleSaveAsTemplate}>
                 <Save className="w-4 h-4 mr-2" />
                 Save as Template
               </Button>
-              <Button variant="outline" className="w-full">
-                <FileText className="w-4 h-4 mr-2" />
+              <Button variant="outline" className="w-full" onClick={handleExportHTML}>
+                <Download className="w-4 h-4 mr-2" />
                 Export HTML
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <AudienceSelector
+        open={showAudienceSelector}
+        onOpenChange={setShowAudienceSelector}
+        onSelect={handleAudienceSelect}
+        currentSelection={selectedAudience}
+      />
     </div>
   )
 }
