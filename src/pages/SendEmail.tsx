@@ -286,6 +286,16 @@ export default function SendEmail() {
     })
   }
 
+  const handleTemplateEdit = (template: EmailTemplate) => {
+    setFormData(prev => ({ ...prev, html: template.content }))
+    setEmailComponents([])
+    setActiveTab('builder')
+    toast({
+      title: "Template Opened for Editing",
+      description: `${template.name} is now open in the visual builder`,
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -465,7 +475,10 @@ export default function SendEmail() {
             </div>
             
             <TabsContent value="templates" className="px-6 pb-6">
-              <EmailTemplates onSelectTemplate={handleTemplateSelect} />
+              <EmailTemplates 
+                onSelectTemplate={handleTemplateSelect} 
+                onEditTemplate={handleTemplateEdit}
+              />
             </TabsContent>
             
             <TabsContent value="builder" className="p-0">

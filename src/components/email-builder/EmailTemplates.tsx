@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Eye, Star, Copy } from "lucide-react";
+import { Search, Eye, Star, Copy, Trash2, Edit } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EmailTemplate {
@@ -23,14 +24,16 @@ interface EmailTemplate {
 
 interface EmailTemplatesProps {
   onSelectTemplate: (template: EmailTemplate) => void;
+  onEditTemplate?: (template: EmailTemplate) => void;
 }
 
-export function EmailTemplates({ onSelectTemplate }: EmailTemplatesProps) {
+export function EmailTemplates({ onSelectTemplate, onEditTemplate }: EmailTemplatesProps) {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null);
+  const [deleteTemplate, setDeleteTemplate] = useState<EmailTemplate | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -63,6 +66,41 @@ export function EmailTemplates({ onSelectTemplate }: EmailTemplatesProps) {
       title: "Template loaded",
       description: `${template.name} has been loaded into the builder`,
     });
+  };
+
+  const handleEditTemplate = (template: EmailTemplate) => {
+    if (onEditTemplate) {
+      onEditTemplate(template);
+      toast({
+        title: "Template opened in editor",
+        description: `${template.name} is now open in the visual builder`,
+      });
+    }
+  };
+
+  const handleDeleteTemplate = async (template: EmailTemplate) => {
+    try {
+      const { error } = await supabase
+        .from('email_templates')
+        .delete()
+        .eq('id', template.id);
+
+      if (error) throw error;
+
+      setTemplates(templates.filter(t => t.id !== template.id));
+      setDeleteTemplate(null);
+      
+      toast({
+        title: "Template deleted",
+        description: `${template.name} has been deleted successfully`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Delete failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const categories = [
@@ -165,13 +203,37 @@ export function EmailTemplates({ onSelectTemplate }: EmailTemplatesProps) {
                   Use Template
                 </Button>
                 
+                {onEditTemplate && (
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => handleEditTemplate(template)}
+                    title="Edit Template"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
+                
                 <Button 
                   variant="outline" 
                   size="icon"
                   onClick={() => setPreviewTemplate(template)}
+                  title="Preview Template"
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
+
+                {!template.is_default && (
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setDeleteTemplate(template)}
+                    title="Delete Template"
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -217,6 +279,15 @@ export function EmailTemplates({ onSelectTemplate }: EmailTemplatesProps) {
             <Button variant="outline" onClick={() => setPreviewTemplate(null)}>
               Close
             </Button>
+            {previewTemplate && onEditTemplate && (
+              <Button variant="outline" onClick={() => {
+                handleEditTemplate(previewTemplate);
+                setPreviewTemplate(null);
+              }}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Template
+              </Button>
+            )}
             {previewTemplate && (
               <Button onClick={() => {
                 handleSelectTemplate(previewTemplate);
@@ -229,6 +300,27 @@ export function EmailTemplates({ onSelectTemplate }: EmailTemplatesProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTemplate} onOpenChange={() => setDeleteTemplate(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteTemplate?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTemplate && handleDeleteTemplate(deleteTemplate)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Template
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
